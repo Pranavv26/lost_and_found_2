@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Claims</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="index.html">L&F System</a>
+  <div class="nav-links">
+    <a href="index.html">Dashboard</a>
+    <a href="add_lost.html">Report Lost</a>
+    <a href="add_found.html">Report Found</a>
+    <a href="claim.html">Claims</a>
+  </div>
+</nav>
+
+<div class="page">
+  <h1 class="page-title">Claims</h1>
+  <p class="page-sub">Submit a claim or review existing ones.</p>
+
+  <div id="alert" class="alert"></div>
+
+  <!-- Submit claim form -->
+  <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:1rem;">Submit a Claim</h2>
+  <div class="form-card" style="margin-bottom:3rem;">
+    <div class="form-group">
+      <label>Item to Claim *</label>
+      <select id="claim-item"></select>
+    </div>
+    <div class="form-group">
+      <label>Claimed By *</label>
+      <select id="claim-user"></select>
+    </div>
+    <button class="btn btn-primary" onclick="submitClaim()">Submit Claim</button>
+  </div>
+
+  <!-- Claims table -->
+  <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:1rem;">All Claims</h2>
+
+  <div class="filter-row">
+    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn" data-filter="requested">Pending</button>
+    <button class="filter-btn" data-filter="approved">Approved</button>
+    <button class="filter-btn" data-filter="rejected">Rejected</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Item</th>
+          <th>Claimed By</th>
+          <th>Status</th>
+          <th>Reviewed By</th>
+          <th>Date</th>
+          <th>Actions (Admin)</th>
+        </tr>
+      </thead>
+      <tbody id="claims-body">
+        <tr><td colspan="7" class="loading">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script src="script.js"></script>
+<script>
+  let allClaims = []
+
+  populateUserSelect('claim-user')
+  populateItemSelect('claim-item', 'found')   // only 'found' items can be claimed
+
+  async function loadClaims() {
+    try {
+      allClaims = await getJSON('/claims')
+      renderClaims(allClaims)
+    } catch (e) {
+      document.getElementById('claims-body').innerHTML =
+        '<tr><td colspan="7" class="loading">Backend not connected.</td></tr>'
+    }
+  }
+
+  function renderClaims(claims) {
+    const tbody = document.getElementById('claims-body')
+    if (!claims.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="loading">No claims found.</td></tr>'; return
+    }
+    tbody.innerHTML = claims.map(c => `
+      <tr>
+        <td>${c.claim_id}</td>
+        <td>${c.item_name}</td>
+        <td>${c.claimed_by_name}</td>
+        <td>${statusBadge(c.status)}</td>
+        <td>${c.reviewed_by_name || '—'}</td>
+        <td>${c.claim_date ? new Date(c.claim_date).toLocaleDateString() : '—'}</td>
+        <td>
+          ${c.status === 'requested' ? `
+            <button class="btn btn-success btn-sm" onclick="resolve(${c.claim_id},'approved')">Approve</button>
+            <button class="btn btn-danger  btn-sm" onclick="resolve(${c.claim_id},'rejected')" style="margin-left:0.4rem">Reject</button>
+          ` : '—'}
+        </td>
+      </tr>`).join('')
+  }
+
+  async function submitClaim() {
+    const item_id    = document.getElementById('claim-item').value
+    const claimed_by = document.getElementById('claim-user').value
+    if (!item_id || !claimed_by) {
+      showAlert('alert', 'Please select an item and a user.', 'error'); return
+    }
+    try {
+      const r = await postJSON('/claims', { item_id, claimed_by })
+      showAlert('alert', `Claim submitted! Claim ID: ${r.claim_id}`, 'success')
+      loadClaims()
+      populateItemSelect('claim-item', 'found')
+    } catch (e) {
+      showAlert('alert', 'Error: ' + e.message, 'error')
+    }
+  }
+
+  async function resolve(claim_id, status) {
+    const notes = status === 'rejected'
+      ? (prompt('Reason for rejection:') || 'Rejected by admin')
+      : 'Verified by admin'
+    try {
+      await patchJSON(`/claims/${claim_id}`, { status, notes, reviewed_by: 1 })
+      showAlert('alert', `Claim ${status}!`, 'success')
+      loadClaims()
+    } catch (e) {
+      showAlert('alert', 'Error: ' + e.message, 'error')
+    }
+  }
+
+  // Filter buttons
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+      setActive(document.querySelectorAll('.filter-btn'), this)
+      const f = this.dataset.filter
+      renderClaims(f === 'all' ? allClaims : allClaims.filter(c => c.status === f))
+    })
+  })
+
+  loadClaims()
+</script>
+</body>
+</html>

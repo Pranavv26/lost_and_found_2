@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Report Found Item</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="index.html">L&F System</a>
+  <div class="nav-links">
+    <a href="index.html">Dashboard</a>
+    <a href="add_lost.html">Report Lost</a>
+    <a href="add_found.html">Report Found</a>
+    <a href="claim.html">Claims</a>
+  </div>
+</nav>
+
+<div class="page">
+  <h1 class="page-title">Report Found Item</h1>
+  <p class="page-sub">Fill in the details of the item you found.</p>
+
+  <div id="alert" class="alert"></div>
+
+  <div class="form-card">
+    <div class="form-group">
+      <label>Item Name *</label>
+      <input type="text" id="item-name" placeholder="e.g. Student ID Card"/>
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input type="text" id="item-desc" placeholder="Brief description"/>
+    </div>
+    <div class="form-group">
+      <label>Category</label>
+      <select id="item-cat">
+        <option value="">— select —</option>
+        <option>Electronics</option>
+        <option>Clothing</option>
+        <option>Accessories</option>
+        <option>Documents</option>
+        <option>Keys</option>
+        <option>Wallet</option>
+        <option>Books</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Found By *</label>
+      <select id="found-by"></select>
+    </div>
+
+    <hr style="border-color:var(--border);margin:1.5rem 0"/>
+
+    <div class="form-group">
+      <label>Where was it found? *</label>
+      <input type="text" id="found-location" placeholder="e.g. Parking Lot, Computer Lab"/>
+    </div>
+    <div class="form-group">
+      <label>Date Found *</label>
+      <input type="date" id="found-date"/>
+    </div>
+
+    <button class="btn btn-primary" onclick="submitFoundReport()">Submit Found Report</button>
+  </div>
+
+  <h2 style="font-size:1.3rem;font-weight:700;margin:3rem 0 1rem;">Recent Found Reports</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>#</th><th>Item</th><th>Found At</th><th>Date</th><th>Found By</th></tr>
+      </thead>
+      <tbody id="found-body">
+        <tr><td colspan="5" class="loading">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script src="script.js"></script>
+<script>
+  populateUserSelect('found-by')
+
+  async function loadFoundReports() {
+    try {
+      const data = await getJSON('/found-reports')
+      const tbody = document.getElementById('found-body')
+      if (!data.length) { tbody.innerHTML = '<tr><td colspan="5" class="loading">No found reports yet.</td></tr>'; return }
+      tbody.innerHTML = data.map(r => `
+        <tr>
+          <td>${r.found_id}</td>
+          <td>${r.item_name}</td>
+          <td>${r.found_location || '—'}</td>
+          <td>${r.found_date ? new Date(r.found_date).toLocaleDateString() : '—'}</td>
+          <td>${r.user_name}</td>
+        </tr>`).join('')
+    } catch (e) {
+      document.getElementById('found-body').innerHTML = '<tr><td colspan="5" class="loading">Backend not connected.</td></tr>'
+    }
+  }
+
+  async function submitFoundReport() {
+    const name     = document.getElementById('item-name').value.trim()
+    const desc     = document.getElementById('item-desc').value.trim()
+    const category = document.getElementById('item-cat').value
+    const foundBy  = document.getElementById('found-by').value
+    const location = document.getElementById('found-location').value.trim()
+    const date     = document.getElementById('found-date').value
+
+    if (!name || !foundBy || !location || !date) {
+      showAlert('alert', 'Please fill in all required fields.', 'error'); return
+    }
+
+    try {
+      const item = await postJSON('/items', { name, description: desc, category, status: 'found', reported_by: foundBy })
+      await postJSON('/found-reports', { item_id: item.item_id, user_id: foundBy, found_location: location, found_date: date })
+      showAlert('alert', `Found report filed! Item ID: ${item.item_id}`, 'success')
+      ;['item-name','item-desc','found-location','found-date'].forEach(id => document.getElementById(id).value = '')
+      loadFoundReports()
+    } catch (e) {
+      showAlert('alert', 'Error: ' + e.message, 'error')
+    }
+  }
+
+  loadFoundReports()
+</script>
+</body>
+</html>

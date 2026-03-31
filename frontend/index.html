@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lost & Found — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="index.html">L&F System</a>
+  <div class="nav-links">
+    <a href="index.html">Dashboard</a>
+    <a href="add_lost.html">Report Lost</a>
+    <a href="add_found.html">Report Found</a>
+    <a href="claim.html">Claims</a>
+  </div>
+</nav>
+
+<div class="page">
+  <h1 class="page-title">Dashboard</h1>
+  <p class="page-sub">Lost &amp; Found Management System — Campus Overview</p>
+
+  <!-- Stats -->
+  <div class="stats" id="stats">
+    <div class="stat-card"><div class="stat-num" id="count-lost">—</div><div class="stat-label">Lost</div></div>
+    <div class="stat-card"><div class="stat-num" id="count-found">—</div><div class="stat-label">Found</div></div>
+    <div class="stat-card"><div class="stat-num" id="count-claimed">—</div><div class="stat-label">Claimed</div></div>
+    <div class="stat-card"><div class="stat-num" id="count-pending">—</div><div class="stat-label">Pending Claims</div></div>
+  </div>
+
+  <!-- Filter -->
+  <div class="filter-row">
+    <button class="filter-btn active" data-filter="all">All Items</button>
+    <button class="filter-btn" data-filter="lost">Lost</button>
+    <button class="filter-btn" data-filter="found">Found</button>
+    <button class="filter-btn" data-filter="claimed">Claimed</button>
+  </div>
+
+  <!-- Items table -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Name</th>
+          <th>Category</th>
+          <th>Status</th>
+          <th>Reported By</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody id="items-body">
+        <tr><td colspan="6" class="loading">Loading items…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script src="script.js"></script>
+<script>
+  let allItems = []
+
+  async function loadStats() {
+    try {
+      const [items, claims] = await Promise.all([
+        getJSON('/items'),
+        getJSON('/claims/status/requested')
+      ])
+      allItems = items
+      document.getElementById('count-lost').textContent    = items.filter(i => i.status === 'lost').length
+      document.getElementById('count-found').textContent   = items.filter(i => i.status === 'found').length
+      document.getElementById('count-claimed').textContent = items.filter(i => i.status === 'claimed').length
+      document.getElementById('count-pending').textContent = claims.length
+      renderTable(allItems)
+    } catch (e) {
+      document.getElementById('items-body').innerHTML =
+        `<tr><td colspan="6" class="loading">Could not connect to backend. Make sure server.js is running.</td></tr>`
+    }
+  }
+
+  function renderTable(items) {
+    const tbody = document.getElementById('items-body')
+    if (items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="loading">No items found.</td></tr>'
+      return
+    }
+    tbody.innerHTML = items.map(i => `
+      <tr>
+        <td>${i.item_id}</td>
+        <td>${i.name}</td>
+        <td>${i.category || '—'}</td>
+        <td>${statusBadge(i.status)}</td>
+        <td>${i.reported_by_name}</td>
+        <td>${i.created_at ? new Date(i.created_at).toLocaleDateString() : '—'}</td>
+      </tr>`).join('')
+  }
+
+  // Filter buttons
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+      setActive(document.querySelectorAll('.filter-btn'), this)
+      const f = this.dataset.filter
+      renderTable(f === 'all' ? allItems : allItems.filter(i => i.status === f))
+    })
+  })
+
+  loadStats()
+</script>
+</body>
+</html>
